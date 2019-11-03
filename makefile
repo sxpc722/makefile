@@ -7,42 +7,40 @@ CPPFLAGS :=
 CXXFLAGS :=
 
 INCLUDE := 
-
 TARGET_ARCH := 
-
 
 LDLIBS := 
 LDFLAGS := -pthread # -rpath
 
+
 CL_FLAGS := -W -emit-llvm -cl-std=CL2.0
 CL_TARGET_ARCH := -target spir64-unknown-unknown
 CL_INCLUDE := -Xclang -finclude-default-header
-
 
 COMPILE.cl = $(CC) $(CL_FLAGS) $(CL_TARGET_ARCH) -c
 LLVM_SPV := llvm-spirv
 LLVM_SPV_FLAGS := --spirv-ocl-builtins-version=CL2.0
 LINK.spv = spirv-link
 
-DIR_SRC := .
-DIR_BLD := ./build
-DIR_OBJ := $(DIR_BLD)/objs/
-DIR_BIN := $(DIR_BLD)/bin/
-DIR_LIB := $(DIR_BLD)/lib/
+DIR_ROOT := $(CURDIR)
+DIR_SRC := $(CURDIR)
+DIR_BLD := $(DIR_ROOT)/build
+DIR_OBJ := $(DIR_BLD)/objs$(DIR_SRC:$(DIR_ROOT)%=%)/
+DIR_BIN := $(DIR_BLD)/bin$(DIR_SRC:$(DIR_ROOT)%=%)/
+DIR_LIB := $(DIR_BLD)/lib$(DIR_SRC:$(DIR_ROOT)%=%)/
 
+SUB_MAKE_DIR := $(dir $(shell find $(DIR_SRC) -mindepth 2  -path '$(DIR_BLD)/*' -prune -o -iname makefile -type f -print))
 DIRS := $(shell find $(DIR_SRC) -mindepth 1 -path $(DIR_BLD) -prune -o -type d -print)
 DIRS := $(DIRS:=/)
 SUB_DIRS := $(shell find $(DIR_SRC) -mindepth 1 -maxdepth 1 -path $(DIR_BLD) -prune -o -type d -print)
 SUB_DIRS := $(SUB_DIRS:=/)
-
-MKDIR := $(shell mkdir -p $(DIRS:$(DIR_SRC)%=$(DIR_OBJ)%) $(DIR_BIN) $(DIR_LIB))
+OBJDIR :=$(DIRS:$(DIR_SRC)/%=$(DIR_OBJ)%)
 
 EXCLUDE :=
 DEPS :=
 TARGETS :=
 
-all : target
-
+all :
 
 define Auto_Generic =
 dirs := $(filter $(1)%,$(DIRS))
@@ -53,7 +51,6 @@ obj_cl := $$(src_cl:$$(DIR_SRC)/%.cl=$$(DIR_OBJ)%.spv)
 DEPS += $$(obj_cl:=.d) $$(obj_c:=.d)
 
 ifeq (,$$(filter $(1),$$(EXCLUDE)))
-
 ifneq (,$$(strip $$(src_c)$$(src_cl)))
 name := $(notdir $(1:/=))
 
@@ -69,19 +66,19 @@ name := $$(DIR_BIN)$$(name)
 endif
 $$(name) : $$(obj_c) $$(obj_cl)
 TARGETS += $$(name)
-endif
 
+endif
 endif
 endef
 
 $(foreach s,$(SUB_DIRS),$(eval $(call Auto_Generic,$(s))))
 
 -include $(DEPS)
+$(DEPS) :|$(OBJDIR)
 $(DIR_OBJ)%.o.d : $(DIR_SRC)/%.c
 	$(CC) -MM -MQ $(@:.d=) $< -MF $@
 $(DIR_OBJ)%.spv.d : $(DIR_SRC)/%.cl
 	$(CC) -MM -MQ $(@:.d=) $< -MF $@
-
 
 
 $(DIR_OBJ)%.o :
@@ -98,11 +95,27 @@ $(DIR_LIB)%.spv:
 	$(LINK.spv) $^ -o $@
 
 
-target : $(TARGETS)
 
-.PHONY: all clean debug
+
+.PHONY: all clean debug $(SUB_MAKE_DIR)
+
+all :$(TARGETS) $(SUB_MAKE_DIR) 
+
+$(TARGETS) :|$(DIR_BIN) $(DIR_LIB)
+
+$(SUB_MAKE_DIR) :
+	@+$(MAKE) DIR_ROOT=$(DIR_ROOT) -C $@
+
+define Clean_Sub =
+	@+$(MAKE) DIR_ROOT=$(DIR_ROOT) -C $(1) clean
+endef
 clean :
-	-$(RM) -r $(DIR_BLD)
+	$(foreach d,$(SUB_MAKE_DIR),$(call Clean_Sub,$(d)))
+	-$(RM) -r $(DIR_BIN) $(DIR_LIB) $(DIR_OBJ)
 
 debug :
 	echo $(TARGETS)
+
+#mkdir for output
+$(OBJDIR) $(DIR_BIN) $(DIR_LIB):
+	@mkdir -p $@
