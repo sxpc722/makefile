@@ -19,7 +19,7 @@ CL_INCLUDE := -Xclang -finclude-default-header
 
 COMPILE.cl = $(CC) $(CL_FLAGS) $(CL_TARGET_ARCH) -c
 LLVM_SPV := llvm-spirv
-LLVM_SPV_FLAGS := --spirv-ocl-builtins-version=CL2.0
+LLVM_SPV_FLAGS := --spirv-ocl-builtins-version=CL2.1
 LINK.spv = spirv-link
 
 DIR_ROOT := $(CURDIR)
